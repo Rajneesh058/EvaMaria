@@ -26,7 +26,7 @@ async def answer(bot, query):
     if not await inline_users(query):
         await query.answer(results=[],
                            cache_time=0,
-                           switch_pm_text='okDa',
+                           switch_pm_text='FILE NOT FOUND',
                            switch_pm_parameter="hehe")
         return
 
@@ -59,7 +59,7 @@ async def answer(bot, query):
         f_caption=file.caption
         if CUSTOM_FILE_CAPTION:
             try:
-                f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
+                f_caption=CUSTOM_FILE_CAPTION.format(mention=query.from_user.mention, file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
             except Exception as e:
                 logger.exception(e)
                 f_caption=f_caption
@@ -74,7 +74,7 @@ async def answer(bot, query):
                 reply_markup=reply_markup))
 
     if results:
-        switch_pm_text = f"{emoji.FILE_FOLDER} Results "
+        switch_pm_text = f"{emoji.FILE_FOLDER} Results - {total}"
         if string:
             switch_pm_text += f" for {string}"
         try:
@@ -103,11 +103,12 @@ async def answer(bot, query):
 def get_reply_markup(query):
     buttons = [
         [
-            InlineKeyboardButton('🎬 MOVIE CHANNAL', url=f'https://t.me/nvsmovielink')
+InlineKeyboardButton('ᴜᴘʟᴏᴀᴅᴇᴅ ꜰʀᴏᴍ', url='https://t.me/+Dek49ihM4u5iNWQ1'),
+
+InlineKeyboardButton('ᴍᴀɪɴᴛᴀɪɴᴇᴅ ʙʏ', url='https://t.me/Epic_creation_bots')
+],[
+InlineKeyboardButton('Search again', switch_inline_query_current_chat=query)
         ]
         ]
     return InlineKeyboardMarkup(buttons)
-
-
-
 
