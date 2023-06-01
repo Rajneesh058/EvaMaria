@@ -338,9 +338,6 @@ Delete A Lot Of Messages From Groups!
 <code>/mp4 https://youtu.be/*******</code>
 <code>/video https://youtu.be/*****</code>  """
 
-
-    
-
-
-    
-
+ALRT_TXT = """Hello {},
+This is Not your Request
+Request Yourself...!!"""
