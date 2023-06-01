@@ -1,6 +1,6 @@
 import logging
 from pyrogram.errors import InputUserDeactivated, UserNotParticipant, FloodWait, UserIsBlocked, PeerIdInvalid
-from info import AUTH_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM
+from info import AUTH_CHANNEL, LONG_IMDB_DESCRIPTION, MAX_LIST_ELM, SHORT_URL, SHORT_API
 from imdb import Cinemagoer
 import asyncio
 from pyrogram.types import Message, InlineKeyboardButton
@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import List
 from database.users_chats_db import db
 from bs4 import BeautifulSoup
-import requests
+import requests, aiohttp 
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -21,7 +21,7 @@ BTN_URL_REGEX = re.compile(
     r"(\[([^\[]+?)\]\((buttonurl|buttonalert):(?:/{0,2})(.+?)(:same)?\))"
 )
 
-imdb = Cinemagoer()
+imdb = Cinemagoer() 
 
 BANNED = {}
 SMART_OPEN = '“'
@@ -38,7 +38,10 @@ class temp(object):
     MELCOW = {}
     U_NAME = None
     B_NAME = None
+    B_LINK = None
     SETTINGS = {}
+    BUTTONS = {}
+    FILES_IDS = {}
 
 async def is_subscribed(bot, query):
     try:
@@ -48,7 +51,7 @@ async def is_subscribed(bot, query):
     except Exception as e:
         logger.exception(e)
     else:
-        if user.status != 'kicked':
+        if user.status != enums.ChatMemberStatus.BANNED:
             return True
 
     return False
@@ -68,7 +71,10 @@ async def get_poster(query, bulk=False, id=False, file=None):
                 year = list_to_str(year[:1]) 
         else:
             year = None
-        movieid = imdb.search_movie(title.lower(), results=10)
+        try:
+           movieid = imdb.search_movie(title.lower(), results=10)
+        except:
+           return None
         if not movieid:
             return None
         if year:
@@ -132,27 +138,9 @@ async def get_poster(query, bulk=False, id=False, file=None):
         'url':f'https://www.imdb.com/title/tt{movieid}'
     }
 # https://github.com/odysseusmax/animated-lamp/blob/2ef4730eb2b5f0596ed6d03e7b05243d93e3415b/bot/utils/broadcast.py#L37
-
-async def broadcast_messages(user_id, message):
-    try:
-        await message.copy(chat_id=user_id)
-        return True, "Success"
-    except FloodWait as e:
-        await asyncio.sleep(e.x)
-        return await broadcast_messages(user_id, message)
-    except InputUserDeactivated:
-        await db.delete_user(int(user_id))
-        logging.info(f"{user_id}-Removed from Database, since deleted account.")
-        return False, "Deleted"
-    except UserIsBlocked:
-        logging.info(f"{user_id} -Blocked the bot.")
-        return False, "Blocked"
-    except PeerIdInvalid:
-        await db.delete_user(int(user_id))
-        logging.info(f"{user_id} - PeerIdInvalid")
-        return False, "Error"
-    except Exception as e:
-        return False, "Error"
+__repo__ = "https://github.com/MrMKN/PROFESSOR-BOT"
+__license__ = "GNU GENERAL PUBLIC LICENSE V2"
+__copyright__ = "Copyright (C) 2023-present MrMKN <https://github.com/MrMKN>"
 
 async def search_gagala(text):
     usr_agent = {
@@ -351,6 +339,63 @@ def parser(text, keyword):
     except:
         return note_data, buttons, None
 
+
+def gparser(text, keyword):
+    if "buttonalert" in text:
+        text = (text.replace("\n", "\\n").replace("\t", "\\t"))
+    buttons = []
+    note_data = ""
+    prev = 0
+    i = 0
+    alerts = []
+    for match in BTN_URL_REGEX.finditer(text):
+        # Check if btnurl is escaped
+        n_escapes = 0
+        to_check = match.start(1) - 1
+        while to_check > 0 and text[to_check] == "\\":
+            n_escapes += 1
+            to_check -= 1
+
+        # if even, not escaped -> create button
+        if n_escapes % 2 == 0:
+            note_data += text[prev:match.start(1)]
+            prev = match.end(1)
+            if match.group(3) == "buttonalert":
+                # create a thruple with button label, url, and newline status
+                if bool(match.group(5)) and buttons:
+                    buttons[-1].append(InlineKeyboardButton(
+                        text=match.group(2),
+                        callback_data=f"galert:{i}:{keyword}"
+                    ))
+                else:
+                    buttons.append([InlineKeyboardButton(
+                        text=match.group(2),
+                        callback_data=f"galert:{i}:{keyword}"
+                    )])
+                i += 1
+                alerts.append(match.group(4))
+            elif bool(match.group(5)) and buttons:
+                buttons[-1].append(InlineKeyboardButton(
+                    text=match.group(2),
+                    url=match.group(4).replace(" ", "")
+                ))
+            else:
+                buttons.append([InlineKeyboardButton(
+                    text=match.group(2),
+                    url=match.group(4).replace(" ", "")
+                )])
+
+        else:
+            note_data += text[prev:to_check]
+            prev = match.start(1) - 1
+    else:
+        note_data += text[prev:]
+
+    try:
+        return note_data, buttons, alerts
+    except:
+        return note_data, buttons, None
+
 def remove_escapes(text: str) -> str:
     res = ""
     is_escaped = False
@@ -375,3 +420,46 @@ def humanbytes(size):
         size /= power
         n += 1
     return str(round(size, 2)) + " " + Dic_powerN[n] + 'B'
+
+
+async def get_shortlink(link):
+
+    url = f'{SHORT_URL}/api'
+    params = {
+      'api': SHORT_API,
+      'url': link,
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, raise_for_status=True, ssl=False) as response:
+                data = await response.json()
+                if data["status"] == "success":
+                    return data['shortenedUrl']
+                else:
+                    logger.error(f"Error: {data['message']}")
+                    return link
+    except Exception as e:
+        logger.error(e)
+        return link
+
+async def send_all(bot, userid, files, ident):
+    for file in files:
+        f_caption = file.caption
+        title = file.file_name
+        size = get_size(file.file_size)
+        if CUSTOM_FILE_CAPTION:
+            try:
+                f_caption = CUSTOM_FILE_CAPTION.format(file_name='' if title is None else title,
+                                                        file_size='' if size is None else size,
+                                                        file_caption='' if f_caption is None else f_caption)
+            except Exception as e:
+                print(e)
+                f_caption = f_caption
+        if f_caption is None:
+            f_caption = f"{title}"
+        await bot.send_cached_media(
+            chat_id=userid,
+            file_id=file.file_id,
+            caption=f_caption,
+            protect_content=True if ident == "filep" else False,
+            reply_markup=InlineKeyboardMarkup( [ [ InlineKeyboardButton('MOVIE UPDATES', url="https://t.me/Movie_Megaverse_Backup") ] ] ))
